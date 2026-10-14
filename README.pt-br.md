@@ -45,7 +45,7 @@ npm install -g @ltcode/rconv@latest
 Para usuários que preferem o script shell original:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/eulucastiagolt/resolver-converter-shell/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/ltcodedev/rconv/main/install.sh | bash
 ```
 
 Veja [legacy/README-legacy.pt-br.md](legacy/README-legacy.pt-br.md) para detalhes.
@@ -133,7 +133,7 @@ Atalhos de teclado principais da TUI:
 
 Além da CLI e da TUI, o projeto inclui uma versão gráfica desktop elegante escrita em **Rust** utilizando **Slint UI**:
 - **100% Nativo para Wayland & X11**: Renderização direta por aceleração de hardware (OpenGL/FemtoVG), sem WebKitGTK ou Chromium, garantindo estabilidade e compatibilidade perfeita no Linux.
-- **Distribuído exclusivamente pelo GitHub**: Não é empacotado no npm. Binários prontos e compactados ficam disponíveis na aba [Releases do GitHub](https://github.com/lucastiagoo/resolver-converter/releases).
+- **Distribuído exclusivamente pelo GitHub**: Não é empacotado no npm. Binários prontos e compactados ficam disponíveis na aba [Releases do GitHub](https://github.com/ltcodedev/rconv/releases).
 
 Para compilar e executar a GUI em desenvolvimento:
 ```bash

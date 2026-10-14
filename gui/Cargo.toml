@@ -5,6 +5,7 @@ edition = "2021"
 description = "Interface gráfica moderna em Rust/Slint para conversão de vídeos para DaVinci Resolve no Linux"
 authors = ["Lucas Tiago"]
 license = "MIT"
+repository = "https://github.com/ltcodedev/rconv"
 
 [dependencies]
 slint = { version = "1.18.1", features = ["compat-1-2"] }

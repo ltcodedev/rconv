@@ -45,7 +45,7 @@ npm install -g @ltcode/rconv@latest
 For users who prefer the original shell script:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/eulucastiagolt/resolver-converter-shell/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/ltcodedev/rconv/main/install.sh | bash
 ```
 
 See [legacy/README-legacy.md](legacy/README-legacy.md) for details.
@@ -133,7 +133,7 @@ Main Keyboard Shortcuts:
 
 In addition to the CLI and TUI, the project includes an elegant desktop graphical application written in **Rust** using **Slint UI**:
 - **100% Native for Wayland & X11**: Renders directly via GPU hardware acceleration (OpenGL/FemtoVG), free of WebKitGTK or Chromium runtimes, ensuring rock-solid stability and zero Wayland crashes.
-- **GitHub Exclusive Distribution**: Kept completely out of npm. Pre-built standalone packages are distributed through [GitHub Releases](https://github.com/lucastiagoo/resolver-converter/releases).
+- **GitHub Exclusive Distribution**: Kept completely out of npm. Pre-built standalone packages are distributed through [GitHub Releases](https://github.com/ltcodedev/rconv/releases).
 
 To compile and launch the GUI locally:
 ```bash
