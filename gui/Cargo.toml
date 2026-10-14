@@ -1,0 +1,24 @@
+[package]
+name = "rconv-gui"
+version = "1.0.0"
+edition = "2021"
+description = "Interface gráfica moderna em Rust/Slint para conversão de vídeos para DaVinci Resolve no Linux"
+authors = ["Lucas Tiago"]
+license = "MIT"
+
+[dependencies]
+slint = { version = "1.18.1", features = ["compat-1-2"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rfd = "0.15"
+which = "7.0"
+walkdir = "2.5"
+regex = "1.10"
+dirs = "6.0"
+arboard = "3.4"
+open = "5.3"
+rustfft = "6.2"
+
+[build-dependencies]
+slint-build = "1.18.1"

@@ -1,7 +1,9 @@
 import type { FfmpegCommand } from 'fluent-ffmpeg';
+import type { ChildProcess } from 'node:child_process';
 
 let isCancelled = false;
 let currentCommand: FfmpegCommand | null = null;
+let currentProcess: ChildProcess | null = null;
 let signalHandler: (() => void) | undefined;
 
 export function cancel(): void {
@@ -14,6 +16,17 @@ export function cancel(): void {
     } catch {
       try {
         currentCommand.kill('SIGKILL');
+      } catch {}
+    }
+  }
+
+  // Mata o processo filho atual (ex: yt-dlp) se existir
+  if (currentProcess) {
+    try {
+      currentProcess.kill('SIGTERM');
+    } catch {
+      try {
+        currentProcess.kill('SIGKILL');
       } catch {}
     }
   }
@@ -33,6 +46,14 @@ export function setCurrentCommand(command: FfmpegCommand | null): void {
 
 export function clearCurrentCommand(): void {
   currentCommand = null;
+}
+
+export function setCurrentProcess(proc: ChildProcess | null): void {
+  currentProcess = proc;
+}
+
+export function clearCurrentProcess(): void {
+  currentProcess = null;
 }
 
 export function setupSignalHandlers(): void {

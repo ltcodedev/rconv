@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-10-14
+
+### Added
+- Native Rust GUI powered by Slint (`rconv-gui`), fully compatible with Wayland and X11 without WebKitGTK dependencies
+- Direct video downloading using `yt-dlp` with automatic conversion to DaVinci Resolve compatible `.mov` in both CLI, TUI and GUI
+- Multi-track External Audio support (`Faixas de Áudio Externo Adicionais`) for dedicated microphones and field recorders
+- DaVinci Resolve-style Waveform Audio Synchronization via Fast Fourier Transform (FFT) cross-correlation with millisecond precision
+- Interactive Reference Track Selector (`Faixa de Referência`) allowing external tracks to sync against any video audio stream
+- Manual offset adjustment and latency compensation in seconds (`+ retardo / - avanço`)
+- Dynamic UI responsiveness with dedicated `ScrollView` ensuring accessibility across compact displays and laptops
+- Conditional folder controls: recursive toggle and batch parameters only display for folder selections, while audio sync is dedicated to file inputs
+- Video quality selection for downloads (`best`, `1080p`, `720p`, `480p`, `360p`, `audio`) via `-q, --quality` flag
+- Dedicated CLI command `rconv download <url>` with alias `rconv dl <url>`
+- Transparent URL detection for the `-i, --input <url>` parameter
+- Option `--keep-original` to preserve the downloaded original file alongside the converted video
+- Option `-F, --list-qualities` to probe and list all available resolutions for a video before downloading
+- Dynamic detection of available video resolutions in the TUI when entering a video URL
+- Redesigned interactive TUI with top navigation tabs (`Arquivos Locais`, `Baixar da Web`, `Sobre & Ajuda`)
+- Button-styled actions panel in TUI with clear icons and visual feedback
+- Dedicated Web Download tab in TUI with modal video quality picker displaying real video formats
+- Automated GitHub Actions release pipeline (`.github/workflows/release-gui.yml`) compiling standalone Linux binaries upon tag push
+- Programmatic exports `downloadAndConvert`, `downloadVideo`, `fetchVideoMetadata`, `checkYtDlp`, `isHttpUrl`, and `getFormatForQuality`
+
+### Fixed
+- Fixed `RangeError: String.prototype.repeat` when updating progress bar at 100% completion in TUI
+
 ## [1.1.4] - 2026-08-05
 
 ### Fixed

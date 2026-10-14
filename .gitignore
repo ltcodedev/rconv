@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+target/
+gui/target/
+graphify-out/
 
 # Logs
 *.log

@@ -1,0 +1,1483 @@
+import { Button, LineEdit, CheckBox, ComboBox, ProgressIndicator, ScrollView } from "std-widgets.slint";
+
+export struct AudioTrackEntry {
+    index: int,
+    display_index: int,
+    label: string,
+    codec: string,
+    channels: string,
+    selected: bool,
+}
+
+export struct ExternalTrackEntry {
+    id: int,
+    path: string,
+    file_name: string,
+    ref_track_index: int,
+    ref_track_label: string,
+    offset_seconds: float,
+    offset_text: string,
+    align_status: string,
+    auto_align: bool,
+    is_aligning: bool,
+}
+
+component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    in property <color> icon-color: root.primary ? #ffffff : (root.enabled ? #89b4fa : #6c7086);
+    callback clicked();
+
+    height: 38px;
+    border-radius: 6px;
+    background: !root.enabled ? #181926 : (root.primary ? (ta.has-hover ? #1d4ed8 : #2563eb) : (ta.has-hover ? #2e3048 : #222336));
+    border-width: 1px;
+    border-color: root.primary ? #3b82f6 : (ta.has-hover ? #45475a : #313244);
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 8px;
+        alignment: center;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.icon-color;
+                width: 15px;
+                height: 15px;
+            }
+        }
+
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: root.primary ? 700 : 500;
+            color: !root.enabled ? #585b70 : (root.primary ? #ffffff : #cdd6f4);
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SidebarItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 42px;
+    border-radius: 8px;
+    background: active ? #2a2b3d : (ta.has-hover ? #242535 : transparent);
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+        alignment: start;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.active ? #89b4fa : #a6adc8;
+                width: 18px;
+                height: 18px;
+            }
+        }
+
+        Text {
+            text: root.title;
+            font-size: 13px;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? #ffffff : #a6adc8;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component PillButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 6px;
+    background: active ? #3b82f6 : (ta.has-hover ? #2a2b3d : #222336);
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 8px;
+        alignment: center;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.active ? #ffffff : #a6adc8;
+                width: 14px;
+                height: 14px;
+            }
+        }
+
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: 600;
+            color: root.active ? #ffffff : #a6adc8;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component PathBadge inherits Rectangle {
+    in property <string> path;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 6px;
+    background: ta.has-hover ? #2a2b3d : #222336;
+    border-width: 1px;
+    border-color: #313244;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        alignment: center;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/folder.svg");
+                colorize: #89b4fa;
+                width: 15px;
+                height: 15px;
+            }
+        }
+
+        Text {
+            text: root.path;
+            font-size: 11px;
+            color: #89b4fa;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "rconv • Conversor DaVinci Resolve";
+    min-width: 920px;
+    min-height: 620px;
+    default-font-size: 13px;
+    background: #181926;
+
+    in-out property <int> active-nav: 0; // 0 = Conversão de Arquivos (Principal), 1 = Baixar da Web (Extra), 2 = Sobre
+    in-out property <string> download-url: "";
+    in-out property <string> download-output: "";
+    in-out property <bool> keep-original: false;
+    in-out property <[string]> quality-options: [
+        "Melhor Qualidade (Máxima / 4K)",
+        "1080p (Full HD)",
+        "720p (HD)",
+        "480p (SD)",
+        "360p (Econômico)"
+    ];
+    in-out property <int> selected-quality-index: 0;
+    in-out property <string> video-title: "";
+    in-out property <string> video-duration: "";
+    in-out property <bool> has-video-info: false;
+    in-out property <bool> is-audio-only: false;
+
+    // Arquivos locais & Faixas de áudio
+    in-out property <string> input-path: "";
+    in-out property <string> output-path: "";
+    in-out property <bool> is-folder-input: false;
+    in-out property <bool> recursive: false;
+    in-out property <bool> local-audio-only: false;
+    in-out property <[AudioTrackEntry]> audio-tracks: [];
+    in-out property <bool> select-all-audio: true;
+    in-out property <string> last-converted-file: "";
+
+    // Faixas de Áudio Externas & Alinhamento por Ondas
+    in-out property <[ExternalTrackEntry]> external-tracks: [];
+
+    // Status & Progresso
+    in-out property <bool> is-busy: false;
+    in-out property <float> progress-value: 0.0;
+    in-out property <string> status-text: "Pronto para iniciar conversão.";
+    in-out property <string> log-text: "";
+    in-out property <bool> ffmpeg-available: true;
+    in-out property <bool> ytdlp-available: true;
+
+    callback paste-from-clipboard();
+    callback clear-video-info();
+    callback browse-download-folder();
+    callback fetch-metadata(string);
+    callback start-download();
+    callback cancel-process();
+
+    callback input-path-changed(string);
+    callback browse-input-file();
+    callback browse-input-folder();
+    callback browse-output-folder();
+    callback create-output-folder();
+    callback start-conversion();
+
+    callback add-external-audio();
+    callback remove-external-audio(int);
+    callback run-track-alignment(int);
+    callback cycle-track-reference(int);
+    callback track-offset-changed(int, string);
+    callback toggle-track-auto-align(int, bool);
+
+    callback toggle-audio-track(int);
+    callback toggle-all-audio-tracks(bool);
+
+    callback open-output-folder();
+    callback open-converted-file();
+
+    HorizontalLayout {
+        // --- BARRA LATERAL ESQUERDA (SIDEBAR) ---
+        Rectangle {
+            width: 220px;
+            background: #1e1f2e;
+            border-width: 1px;
+            border-color: #272838;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 8px;
+
+                // Logo do Aplicativo
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 8px;
+                        background: #4c71f5;
+                        VerticalLayout {
+                            alignment: center;
+                            HorizontalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/film.svg");
+                                    colorize: #ffffff;
+                                    width: 18px;
+                                    height: 18px;
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        text: "rconv";
+                        font-size: 18px;
+                        font-weight: 800;
+                        color: #ffffff;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle { height: 12px; }
+
+                // Menu de Navegação - PRIORIDADE: Conversor primeiro!
+                SidebarItem {
+                    icon: @image-url("icons/film.svg");
+                    title: "Conversor DaVinci";
+                    active: root.active-nav == 0;
+                    clicked => { root.active-nav = 0; }
+                }
+
+                SidebarItem {
+                    icon: @image-url("icons/download.svg");
+                    title: "Baixar da Web";
+                    active: root.active-nav == 1;
+                    clicked => { root.active-nav = 1; }
+                }
+
+                SidebarItem {
+                    icon: @image-url("icons/info.svg");
+                    title: "Sobre & Codecs";
+                    active: root.active-nav == 2;
+                    clicked => { root.active-nav = 2; }
+                }
+
+                // Espaço flexível
+                Rectangle { }
+
+                // Rodapé da Sidebar com Badges
+                VerticalLayout {
+                    spacing: 6px;
+                    Text { text: "DEPENDÊNCIAS"; font-size: 10px; font-weight: 700; color: #585b70; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Rectangle {
+                            height: 24px;
+                            border-radius: 4px;
+                            background: root.ffmpeg-available ? #1c3629 : #3a1e24;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: root.ffmpeg-available ? @image-url("icons/check.svg") : @image-url("icons/x.svg");
+                                        colorize: root.ffmpeg-available ? #a6e3a1 : #f38ba8;
+                                        width: 11px;
+                                        height: 11px;
+                                    }
+                                }
+                                Text {
+                                    text: "FFmpeg";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: root.ffmpeg-available ? #a6e3a1 : #f38ba8;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        Rectangle {
+                            height: 24px;
+                            border-radius: 4px;
+                            background: root.ytdlp-available ? #1c3629 : #3a1e24;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: root.ytdlp-available ? @image-url("icons/check.svg") : @image-url("icons/x.svg");
+                                        colorize: root.ytdlp-available ? #a6e3a1 : #f38ba8;
+                                        width: 11px;
+                                        height: 11px;
+                                    }
+                                }
+                                Text {
+                                    text: "yt-dlp";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: root.ytdlp-available ? #a6e3a1 : #f38ba8;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                    Text { text: "Linux Wayland/X11"; font-size: 11px; color: #6c7086; }
+                }
+            }
+        }
+
+        // --- ÁREA PRINCIPAL (MAIN CONTENT) ---
+        Rectangle {
+            background: #181926;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 16px;
+
+                // TOPO: Barra com modos e pasta de download persistida
+                HorizontalLayout {
+                    height: 36px;
+                    alignment: space-between;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        PillButton {
+                            icon: @image-url("icons/film.svg");
+                            text: "Conversão de Arquivos";
+                            active: root.active-nav == 0;
+                            clicked => { root.active-nav = 0; }
+                        }
+                        PillButton {
+                            icon: @image-url("icons/download.svg");
+                            text: "Baixar da Web";
+                            active: root.active-nav == 1;
+                            clicked => { root.active-nav = 1; }
+                        }
+                    }
+
+                    // Botão da pasta de destino (clicável, abre seletor e salva)
+                    PathBadge {
+                        path: (root.active-nav == 1 ? root.download-output : root.output-path) != "" 
+                            ? (root.active-nav == 1 ? root.download-output : root.output-path) 
+                            : "Selecionar Pasta de Destino";
+                        clicked => {
+                            if root.active-nav == 1 {
+                                root.browse-download-folder();
+                            } else {
+                                root.browse-output-folder();
+                            }
+                        }
+                    }
+                }
+
+                ScrollView {
+                    VerticalLayout {
+                        padding-right: 8px;
+                        spacing: 16px;
+                        alignment: start;
+
+                        // =========================================================================
+                        // --- ABA 0: CONVERSOR DE ARQUIVOS LOCAIS (TELA PRINCIPAL / PRIORIDADE) ---
+                        // =========================================================================
+                        if root.active-nav == 0: VerticalLayout {
+                            alignment: start;
+                            spacing: 14px;
+
+                            // Alternador Modo: Vídeo + Áudio ou Apenas Áudio
+                            HorizontalLayout {
+                                spacing: 8px;
+                                PillButton {
+                                    icon: @image-url("icons/video.svg");
+                                    text: "Converter Vídeo + Áudio (.mov PCM)";
+                                    active: !root.local-audio-only;
+                                    clicked => { root.local-audio-only = false; }
+                                }
+                                PillButton {
+                                    icon: @image-url("icons/music.svg");
+                                    text: "Extrair Apenas Áudio (Linear PCM .mov)";
+                                    active: root.local-audio-only;
+                                    clicked => { root.local-audio-only = true; }
+                                }
+                            }
+
+                            // Card 1: Arquivo ou Pasta de Entrada & Seletor de Faixas de Áudio
+                            Rectangle {
+                                vertical-stretch: 0;
+                                background: #1e1f2e;
+                                border-radius: 12px;
+                                border-width: 1px;
+                                border-color: #272838;
+
+                        VerticalLayout {
+                            padding: 16px;
+                            spacing: 12px;
+                            alignment: start;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("icons/file-video.svg");
+                                        colorize: #89b4fa;
+                                        width: 16px;
+                                        height: 16px;
+                                    }
+                                }
+                                Text { text: "Arquivo ou Pasta de Entrada:"; font-weight: 700; color: #89b4fa; vertical-alignment: center; }
+                            }
+
+                            HorizontalLayout {
+                                height: 38px;
+                                spacing: 8px;
+                                LineEdit {
+                                    text <=> root.input-path;
+                                    placeholder-text: "Selecione um arquivo de vídeo ou pasta...";
+                                    enabled: !root.is-busy;
+                                    edited(text) => { root.input-path-changed(text); }
+                                }
+                                IconButton {
+                                    icon: @image-url("icons/file-video.svg");
+                                    text: "Arquivo";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.browse-input-file(); }
+                                }
+                                IconButton {
+                                    icon: @image-url("icons/folder.svg");
+                                    text: "Pasta";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.browse-input-folder(); }
+                                }
+                            }
+
+                            // SELETOR MULTI-FAIXA DE ÁUDIO (Apenas exibido quando há faixas detectadas em arquivo individual)
+                            if root.audio-tracks.length > 0: VerticalLayout {
+                                spacing: 8px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Image {
+                                                source: @image-url("icons/music.svg");
+                                                colorize: #89b4fa;
+                                                width: 14px;
+                                                height: 14px;
+                                            }
+                                        }
+                                        Text {
+                                            text: "Mapeamento de Faixas de Áudio:";
+                                            font-weight: 700;
+                                            color: #cdd6f4;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    // Botão Master: Todas as Faixas
+                                    Rectangle {
+                                        height: 28px;
+                                        border-radius: 4px;
+                                        background: root.select-all-audio ? #2a3854 : #222336;
+                                        border-width: 1px;
+                                        border-color: root.select-all-audio ? #3b82f6 : #313244;
+
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            padding-right: 10px;
+                                            spacing: 6px;
+                                            alignment: center;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: root.select-all-audio ? @image-url("icons/check.svg") : @image-url("icons/music.svg");
+                                                    colorize: root.select-all-audio ? #60a5fa : #a6adc8;
+                                                    width: 12px;
+                                                    height: 12px;
+                                                }
+                                            }
+                                            Text {
+                                                text: root.select-all-audio ? "Todas as faixas (Selecionadas)" : "Selecionar Todas";
+                                                font-size: 11px;
+                                                font-weight: 600;
+                                                color: root.select-all-audio ? #ffffff : #a6adc8;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { root.toggle-all-audio-tracks(!root.select-all-audio); }
+                                        }
+                                    }
+                                }
+
+                                // Lista interativa de faixas com checkboxes independentes
+                                VerticalLayout {
+                                    spacing: 6px;
+                                    for track in root.audio-tracks: Rectangle {
+                                        height: 38px;
+                                        border-radius: 6px;
+                                        background: track.selected ? #1e283d : #181926;
+                                        border-width: 1px;
+                                        border-color: track.selected ? #3b82f6 : #313244;
+
+                                        HorizontalLayout {
+                                            padding-left: 12px;
+                                            padding-right: 12px;
+                                            spacing: 10px;
+                                            alignment: space-between;
+
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                alignment: start;
+
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Rectangle {
+                                                        width: 18px;
+                                                        height: 18px;
+                                                        border-radius: 4px;
+                                                        background: track.selected ? #3b82f6 : #2a2b3d;
+                                                        border-width: 1px;
+                                                        border-color: track.selected ? #60a5fa : #45475a;
+
+                                                        VerticalLayout {
+                                                            alignment: center;
+                                                            HorizontalLayout {
+                                                                alignment: center;
+                                                                Image {
+                                                                    source: @image-url("icons/check.svg");
+                                                                    colorize: #ffffff;
+                                                                    width: 12px;
+                                                                    height: 12px;
+                                                                    visible: track.selected;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: track.label;
+                                                    font-size: 13px;
+                                                    font-weight: track.selected ? 700 : 500;
+                                                    color: track.selected ? #ffffff : #cdd6f4;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: end;
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Rectangle {
+                                                        height: 22px;
+                                                        border-radius: 4px;
+                                                        background: #11111b;
+                                                        HorizontalLayout {
+                                                            padding-left: 8px;
+                                                            padding-right: 8px;
+                                                            alignment: center;
+                                                            Text {
+                                                                text: track.codec;
+                                                                font-size: 11px;
+                                                                font-weight: 600;
+                                                                color: #89dceb;
+                                                                vertical-alignment: center;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Rectangle {
+                                                        height: 22px;
+                                                        border-radius: 4px;
+                                                        background: #11111b;
+                                                        HorizontalLayout {
+                                                            padding-left: 8px;
+                                                            padding-right: 8px;
+                                                            alignment: center;
+                                                            Text {
+                                                                text: track.channels;
+                                                                font-size: 11px;
+                                                                color: #a6e3a1;
+                                                                vertical-alignment: center;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { root.toggle-audio-track(track.index); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if root.is-folder-input: CheckBox {
+                                text: "Converter subpastas recursivamente (preservando estrutura de pastas)";
+                                checked <=> root.recursive;
+                                enabled: !root.is-busy;
+                            }
+                        }
+                    }
+
+                    // Card 1.5: Faixas de Áudio Externas & Alinhamento por Ondas (Waveform Sync - Apenas para arquivos individuais)
+                    if !root.is-folder-input && root.input-path != "": Rectangle {
+                        vertical-stretch: 0;
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: root.external-tracks.length > 0 ? #3b82f6 : #272838;
+
+                        VerticalLayout {
+                            padding: 16px;
+                            spacing: 12px;
+                            alignment: start;
+
+                            HorizontalLayout {
+                                alignment: space-between;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("icons/music.svg");
+                                            colorize: root.external-tracks.length > 0 ? #a6e3a1 : #89b4fa;
+                                            width: 16px;
+                                            height: 16px;
+                                        }
+                                    }
+                                    Text {
+                                        text: "Faixas de Áudio Externo Adicionais:";
+                                        font-weight: 700;
+                                        color: root.external-tracks.length > 0 ? #a6e3a1 : #89b4fa;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                if root.external-tracks.length > 0: IconButton {
+                                    icon: @image-url("icons/folder-plus.svg");
+                                    text: "+ Adicionar Faixa de Áudio";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.add-external-audio(); }
+                                }
+                            }
+
+                            if root.external-tracks.length == 0: HorizontalLayout {
+                                IconButton {
+                                    icon: @image-url("icons/music.svg");
+                                    text: "Importar Faixas de Áudio Externo (.wav, .mp3, .m4a...)";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.add-external-audio(); }
+                                }
+                            }
+
+                            if root.external-tracks.length > 0: VerticalLayout {
+                                spacing: 10px;
+
+                                for track in root.external-tracks: Rectangle {
+                                    border-radius: 8px;
+                                    background: #181926;
+                                    border-width: 1px;
+                                    border-color: #313244;
+
+                                    VerticalLayout {
+                                        padding: 12px;
+                                        spacing: 10px;
+
+                                        // Linha 1: Nome do arquivo, caminho e botão remover
+                                        HorizontalLayout {
+                                            alignment: space-between;
+
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                alignment: start;
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Image {
+                                                        source: @image-url("icons/music.svg");
+                                                        colorize: #a6e3a1;
+                                                        width: 14px;
+                                                        height: 14px;
+                                                    }
+                                                }
+                                                Text {
+                                                    text: track.file_name;
+                                                    font-size: 13px;
+                                                    font-weight: 700;
+                                                    color: #ffffff;
+                                                    vertical-alignment: center;
+                                                }
+                                                Text {
+                                                    text: "(" + track.path + ")";
+                                                    font-size: 11px;
+                                                    color: #6c7086;
+                                                    vertical-alignment: center;
+                                                    overflow: elide;
+                                                }
+                                            }
+
+                                            // Botão Remover esta faixa
+                                            Rectangle {
+                                                height: 24px;
+                                                border-radius: 4px;
+                                                background: #2f1d28;
+                                                border-width: 1px;
+                                                border-color: #f38ba8;
+
+                                                HorizontalLayout {
+                                                    padding-left: 8px;
+                                                    padding-right: 8px;
+                                                    spacing: 4px;
+                                                    alignment: center;
+
+                                                    VerticalLayout {
+                                                        alignment: center;
+                                                        Image {
+                                                            source: @image-url("icons/x.svg");
+                                                            colorize: #f38ba8;
+                                                            width: 10px;
+                                                            height: 10px;
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        text: "Remover";
+                                                        font-size: 11px;
+                                                        font-weight: 600;
+                                                        color: #f38ba8;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+
+                                                TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.remove-external-audio(track.id); }
+                                                }
+                                            }
+                                        }
+
+                                        // Linha 2: Checkbox e Seletor de Base
+                                        HorizontalLayout {
+                                            alignment: space-between;
+                                            spacing: 12px;
+
+                                            CheckBox {
+                                                text: "Sincronização por Forma de Onda (Waveform Audio Sync)";
+                                                checked: track.auto_align;
+                                                enabled: !root.is-busy && !track.is_aligning;
+                                                toggled => { root.toggle-track-auto-align(track.id, self.checked); }
+                                            }
+
+                                            // Botão seletor do áudio de base
+                                            if track.auto_align: HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: end;
+
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Text {
+                                                        text: "Faixa de Referência:";
+                                                        font-size: 11px;
+                                                        font-weight: 600;
+                                                        color: #a6adc8;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    height: 26px;
+                                                    border-radius: 4px;
+                                                    background: ta_ref.has-hover ? #2a3854 : #222336;
+                                                    border-width: 1px;
+                                                    border-color: #3b82f6;
+
+                                                    HorizontalLayout {
+                                                        padding-left: 8px;
+                                                        padding-right: 8px;
+                                                        spacing: 4px;
+                                                        alignment: center;
+
+                                                        Text {
+                                                            text: track.ref_track_label + " ▾";
+                                                            font-size: 11px;
+                                                            font-weight: 700;
+                                                            color: #89b4fa;
+                                                            vertical-alignment: center;
+                                                        }
+                                                    }
+
+                                                    ta_ref := TouchArea {
+                                                        mouse-cursor: pointer;
+                                                        clicked => { root.cycle-track-reference(track.id); }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Linha 3: Botão Sincronizar e Status
+                                        if track.auto_align: HorizontalLayout {
+                                            spacing: 12px;
+                                            alignment: start;
+
+                                            IconButton {
+                                                icon: @image-url("icons/sliders.svg");
+                                                text: track.is_aligning ? "Processando..." : "Alinhar Formas de Onda";
+                                                enabled: !root.is-busy && !track.is_aligning && root.input-path != "";
+                                                clicked => { root.run-track-alignment(track.id); }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: track.align_status != "" ? track.align_status : "Pronto para análise (alinhamento automático no processamento).";
+                                                    font-size: 12px;
+                                                    font-weight: 600;
+                                                    color: track.align_status != "" ? #89dceb : #6c7086;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                        }
+
+                                        // Linha 4: Ajuste manual de offset
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            alignment: start;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Compensação de Offset (s):";
+                                                    font-size: 11px;
+                                                    color: #a6adc8;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+
+                                            LineEdit {
+                                                width: 110px;
+                                                height: 30px;
+                                                text: track.offset_text;
+                                                enabled: !root.is-busy && !track.is_aligning;
+                                                edited(val) => { root.track-offset-changed(track.id, val); }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "(+ retardo / - avanço)";
+                                                    font-size: 11px;
+                                                    color: #6c7086;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Card 2: Pasta de Saída
+                    Rectangle {
+                        vertical-stretch: 0;
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #272838;
+
+                        VerticalLayout {
+                            padding: 16px;
+                            spacing: 12px;
+                            alignment: start;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("icons/folder.svg");
+                                        colorize: #89b4fa;
+                                        width: 16px;
+                                        height: 16px;
+                                    }
+                                }
+                                Text { text: "Pasta de Saída:"; font-weight: 700; color: #89b4fa; vertical-alignment: center; }
+                            }
+
+                            HorizontalLayout {
+                                height: 38px;
+                                spacing: 8px;
+                                LineEdit {
+                                    text <=> root.output-path;
+                                    placeholder-text: "Caminho da pasta de destino...";
+                                    enabled: !root.is-busy;
+                                }
+                                IconButton {
+                                    icon: @image-url("icons/folder-open.svg");
+                                    text: "Escolher Pasta";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.browse-output-folder(); }
+                                }
+                                IconButton {
+                                    icon: @image-url("icons/folder-plus.svg");
+                                    text: "Criar rconv-output";
+                                    enabled: !root.is-busy;
+                                    clicked => { root.create-output-folder(); }
+                                }
+                            }
+                        }
+                    }
+
+                    // Ações Locais - Botão Iniciar Conversão em destaque
+                    HorizontalLayout {
+                        vertical-stretch: 0;
+                        alignment: end;
+                        spacing: 10px;
+                        IconButton {
+                            icon: @image-url("icons/rocket.svg");
+                            text: root.is-busy ? "Convertendo..." : "INICIAR CONVERSÃO";
+                            primary: true;
+                            enabled: !root.is-busy && root.input-path != "" && root.output-path != "";
+                            clicked => { root.start-conversion(); }
+                        }
+                        if root.is-busy: IconButton {
+                            icon: @image-url("icons/x.svg");
+                            text: "Cancelar";
+                            icon-color: #f38ba8;
+                            clicked => { root.cancel-process(); }
+                        }
+                    }
+
+                    // Card de Progresso
+                    if root.is-busy: Rectangle {
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #4c71f5;
+
+                        VerticalLayout {
+                            padding: 20px;
+                            spacing: 12px;
+
+                            Text {
+                                text: root.status-text;
+                                font-size: 14px;
+                                font-weight: 700;
+                                color: #89b4fa;
+                            }
+
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: root.log-text != "" ? root.log-text : "Convertendo arquivo..."; color: #a6adc8; font-size: 12px; }
+                                Text { text: Math.round(root.progress-value) + "%"; font-weight: 700; color: #ffffff; }
+                            }
+
+                            ProgressIndicator {
+                                progress: root.progress-value / 100.0;
+                            }
+                        }
+                    }
+
+                    // BOTÕES DE SUCESSO / ABRIR ARQUIVO
+                    if !root.is-busy && root.last-converted-file != "": HorizontalLayout {
+                        spacing: 10px;
+                        alignment: center;
+                        IconButton {
+                            icon: @image-url("icons/folder-open.svg");
+                            text: "Abrir Pasta de Destino";
+                            clicked => { root.open-output-folder(); }
+                        }
+                        IconButton {
+                            icon: @image-url("icons/play.svg");
+                            text: "Abrir Vídeo no Reprodutor";
+                            clicked => { root.open-converted-file(); }
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // --- ABA 1: BAIXAR DA WEB (UTILITÁRIO / EXTRA) ---
+                // =========================================================================
+                if root.active-nav == 1: VerticalLayout {
+                    alignment: start;
+                    spacing: 16px;
+
+                    // Botão Verde de Colar da Área de Transferência
+                    Rectangle {
+                        height: 52px;
+                        border-radius: 10px;
+                        background: ta_paste.has-hover ? #15803d : #16a34a;
+
+                        HorizontalLayout {
+                            padding-left: 18px;
+                            padding-right: 18px;
+                            alignment: space-between;
+
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("icons/clipboard.svg");
+                                        colorize: #ffffff;
+                                        width: 18px;
+                                        height: 18px;
+                                    }
+                                }
+                                Text {
+                                    text: "Clique para colar o link do vídeo da área de transferência";
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                    color: #ffffff;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 4px;
+                                alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: #22c55e;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            alignment: center;
+                                            Text { text: "Ctrl"; font-size: 11px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
+                                        }
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: #22c55e;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            alignment: center;
+                                            Text { text: "V"; font-size: 11px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        ta_paste := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.paste-from-clipboard(); }
+                        }
+                    }
+
+                    // Campo de digitação manual
+                    HorizontalLayout {
+                        height: 38px;
+                        spacing: 8px;
+                        LineEdit {
+                            text <=> root.download-url;
+                            placeholder-text: "Ou digite/cole uma URL do YouTube, Vimeo, etc...";
+                            enabled: !root.is-busy;
+                            accepted => { root.fetch-metadata(root.download-url); }
+                        }
+                        IconButton {
+                            icon: @image-url("icons/video.svg");
+                            text: "Carregar Vídeo";
+                            enabled: !root.is-busy && root.download-url != "";
+                            clicked => { root.fetch-metadata(root.download-url); }
+                        }
+                    }
+
+                    // ESTADO 1: NENHUM VÍDEO CARREGADO
+                    if !root.has-video-info && !root.is-busy: Rectangle {
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #272838;
+
+                        VerticalLayout {
+                            padding: 40px;
+                            spacing: 12px;
+                            alignment: center;
+
+                            HorizontalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/download.svg");
+                                    colorize: #45475a;
+                                    width: 48px;
+                                    height: 48px;
+                                }
+                            }
+
+                            Text {
+                                text: "Download de Vídeos da Web";
+                                font-size: 18px;
+                                font-weight: 700;
+                                color: #ffffff;
+                                horizontal-alignment: center;
+                            }
+
+                            Text {
+                                text: "Baixe vídeos online já convertidos diretamente para o padrão DaVinci Resolve (.mov PCM).";
+                                font-size: 13px;
+                                color: #a6adc8;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+
+                    // ESTADO 2: VÍDEO IDENTIFICADO
+                    if root.has-video-info && !root.is-busy: Rectangle {
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #313244;
+
+                        VerticalLayout {
+                            padding: 20px;
+                            spacing: 16px;
+
+                            HorizontalLayout {
+                                alignment: space-between;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    PillButton {
+                                        icon: @image-url("icons/video.svg");
+                                        text: "Vídeo (.mov)";
+                                        active: !root.is-audio-only;
+                                        clicked => { root.is-audio-only = false; }
+                                    }
+                                    PillButton {
+                                        icon: @image-url("icons/music.svg");
+                                        text: "Apenas Áudio (PCM)";
+                                        active: root.is-audio-only;
+                                        clicked => { root.is-audio-only = true; }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: 28px;
+                                    height: 28px;
+                                    border-radius: 14px;
+                                    background: ta_close.has-hover ? #3b3d54 : #2a2b3d;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        HorizontalLayout {
+                                            alignment: center;
+                                            Image {
+                                                source: @image-url("icons/x.svg");
+                                                colorize: #a6adc8;
+                                                width: 14px;
+                                                height: 14px;
+                                            }
+                                        }
+                                    }
+                                    ta_close := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.clear-video-info(); }
+                                    }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 10px;
+                                Text {
+                                    text: "Título :";
+                                    font-weight: 700;
+                                    color: #cdd6f4;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {
+                                    height: 36px;
+                                    background: #2a2b3d;
+                                    border-radius: 6px;
+                                    HorizontalLayout {
+                                        padding-left: 12px;
+                                        padding-right: 12px;
+                                        Text {
+                                            text: root.video-title;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            color: #ffffff;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if !root.is-audio-only: VerticalLayout {
+                                spacing: 6px;
+                                Text { text: "Resolução do Vídeo:"; font-size: 14px; font-weight: 700; color: #ffffff; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    Text {
+                                        text: "Selecionar qualidade:";
+                                        color: #a6adc8;
+                                        vertical-alignment: center;
+                                        width: 160px;
+                                    }
+                                    ComboBox {
+                                        model: root.quality-options;
+                                        current-index <=> root.selected-quality-index;
+                                    }
+                                }
+                            }
+
+                            VerticalLayout {
+                                spacing: 6px;
+                                Text { text: "Áudio:"; font-size: 14px; font-weight: 700; color: #ffffff; }
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    Text {
+                                        text: "Formato de saída:";
+                                        color: #a6adc8;
+                                        vertical-alignment: center;
+                                        width: 160px;
+                                    }
+                                    Rectangle {
+                                        height: 36px;
+                                        background: #2a2b3d;
+                                        border-radius: 6px;
+                                        HorizontalLayout {
+                                            padding-left: 12px;
+                                            padding-right: 12px;
+                                            spacing: 8px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("icons/check.svg");
+                                                    colorize: #a6e3a1;
+                                                    width: 14px;
+                                                    height: 14px;
+                                                }
+                                            }
+                                            Text {
+                                                text: "Linear PCM 16-bit (Nativo DaVinci Resolve)";
+                                                color: #a6e3a1;
+                                                font-weight: 600;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            CheckBox {
+                                text: "Manter arquivo original baixado além do .mov convertido";
+                                checked <=> root.keep-original;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 12px;
+                                alignment: center;
+
+                                IconButton {
+                                    icon: @image-url("icons/download.svg");
+                                    text: "Baixar Vídeo";
+                                    primary: true;
+                                    clicked => { root.start-download(); }
+                                }
+
+                                IconButton {
+                                    icon: @image-url("icons/sliders.svg");
+                                    text: "Mais opções";
+                                    primary: false;
+                                    clicked => { root.browse-download-folder(); }
+                                }
+                            }
+                        }
+                    }
+
+                    // ESTADO 3: PROCESSANDO
+                    if root.is-busy: Rectangle {
+                        background: #1e1f2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #4c71f5;
+
+                        VerticalLayout {
+                            padding: 24px;
+                            spacing: 14px;
+
+                            Text {
+                                text: root.status-text;
+                                font-size: 15px;
+                                font-weight: 700;
+                                color: #89b4fa;
+                            }
+
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: root.log-text != "" ? root.log-text : "Processando..."; color: #a6adc8; font-size: 12px; }
+                                Text { text: Math.round(root.progress-value) + "%"; font-weight: 700; color: #ffffff; }
+                            }
+
+                            ProgressIndicator {
+                                progress: root.progress-value / 100.0;
+                            }
+
+                            HorizontalLayout {
+                                alignment: end;
+                                IconButton {
+                                    icon: @image-url("icons/x.svg");
+                                    text: "Cancelar";
+                                    icon-color: #f38ba8;
+                                    clicked => { root.cancel-process(); }
+                                }
+                            }
+                        }
+                    }
+
+                    // BOTÕES DE SUCESSO
+                    if !root.is-busy && root.last-converted-file != "": HorizontalLayout {
+                        spacing: 10px;
+                        alignment: center;
+                        IconButton {
+                            icon: @image-url("icons/folder-open.svg");
+                            text: "Abrir Pasta de Destino";
+                            clicked => { root.open-output-folder(); }
+                        }
+                        IconButton {
+                            icon: @image-url("icons/play.svg");
+                            text: "Abrir Vídeo no Reprodutor";
+                            clicked => { root.open-converted-file(); }
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // --- ABA 2: SOBRE & CODECS ---
+                // =========================================================================
+                if root.active-nav == 2: Rectangle {
+                    background: #1e1f2e;
+                    border-radius: 12px;
+                    border-width: 1px;
+                    border-color: #272838;
+
+                    VerticalLayout {
+                        padding: 24px;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/film.svg");
+                                    colorize: #89b4fa;
+                                    width: 20px;
+                                    height: 20px;
+                                }
+                            }
+                            Text { text: "Sobre o rconv & Compatibilidade DaVinci Resolve"; font-size: 16px; font-weight: 700; color: #89b4fa; vertical-alignment: center; }
+                        }
+
+                        Text {
+                            text: "No Linux, o DaVinci Resolve requer codecs proprietários que muitas vezes não estão disponíveis por padrão (como áudio AAC).\n\nO rconv resolve isso convertendo automaticamente qualquer vídeo da web ou do computador para o padrão de edição do DaVinci:\n• Vídeo: MPEG-4 (-c:v mpeg4 -q:v 0)\n• Áudio: Linear PCM 16-bit (-c:a pcm_s16le)\n• Container: QuickTime .mov\n\nEssa interface gráfica nativa em Rust é feita com Slint UI, funcionando perfeitamente em Wayland e X11 sem WebKitGTK.";
+                            color: #cdd6f4;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+}
+}

@@ -1,6 +1,6 @@
 {
   "name": "@ltcode/rconv",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "CLI and library for converting videos to DaVinci Resolve compatible format",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,12 +23,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target bun",
+    "build": "bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target bun --external @opentui/core",
     "build:node": "tsc",
     "dev": "bun run src/cli.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build:node"
+    "prepublishOnly": "bun run build:node",
+    "gui:dev": "cargo run --manifest-path gui/Cargo.toml",
+    "gui:build": "cargo build --release --manifest-path gui/Cargo.toml",
+    "gui:watch": "cargo watch -C gui -x run"
   },
   "dependencies": {
     "@opentui/core": "^0.5.1",

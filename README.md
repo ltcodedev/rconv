@@ -8,10 +8,12 @@ CLI and library for converting videos to DaVinci Resolve compatible format. Work
 ## Features
 
 - Convert videos to `.mov` format (MPEG-4 + PCM audio) compatible with DaVinci Resolve
+- Download Web videos via `yt-dlp` (YouTube, Vimeo, etc.) directly converted to `.mov`
 - Support for wildcards and glob patterns (`*.mp4`, `*.mkv`)
 - Recursive directory search with preserved structure
 - Select specific audio tracks
-- Ctrl+C cancels all conversions
+- Interactive terminal control center (TUI) with media browser and URL download
+- Safe cancellation on Ctrl+C without corrupting conversions or leaving orphan processes
 - Works as CLI and library
 
 ## Installation
@@ -60,22 +62,86 @@ rconv -i <input> -o <output>
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input <pattern>` | Input video file or pattern (e.g., `*.mp4`, `*.mkv`) |
+| `-i, --input <pattern or URL>` | Input video file, pattern (e.g., `*.mp4`, `*.mkv`) or video URL |
 | `-o, --output <dir>` | Output directory for converted files |
 | `-r, --recursive` | Search recursively in subdirectories (preserves directory structure) |
 | `-m, --map-audio <tracks>` | Map specific audio tracks (comma-separated, e.g., `1,3,5`) |
+| `-q, --quality <quality>` | Download video quality (`best`, `1080p`, `720p`, `480p`, `360p`, `audio`) [default: `best`] |
+| `-F, --list-qualities` | List available video qualities for URL and exit |
+| `--keep-original` | Keep the original downloaded video file alongside converted `.mov` |
 | `-v, --version` | Show version |
 | `-h, --help` | Show help |
 
-### Interactive Control Center
+### Download Web Videos (yt-dlp)
+
+You can download online videos using the dedicated `download` (or `dl`) command and choose the video quality:
+
+```bash
+# Check available resolutions for a video before downloading:
+rconv dl "https://www.youtube.com/watch?v=VIDEO_ID" -F
+
+# Download and convert directly to DaVinci Resolve compatible .mov
+rconv download "https://www.youtube.com/watch?v=VIDEO_ID" -o ./output
+
+# Selecting a specific resolution (e.g., 1080p, 720p, 480p)
+rconv dl "https://www.youtube.com/watch?v=VIDEO_ID" -q 1080p
+
+# Download audio only converted to PCM .mov
+rconv dl "https://www.youtube.com/watch?v=VIDEO_ID" -q audio
+
+# Keep the original downloaded file alongside the converted .mov
+rconv dl "https://www.youtube.com/watch?v=VIDEO_ID" -q 720p --keep-original
+```
+
+Or by directly passing a URL to the `-i` option:
+
+```bash
+rconv -i "https://www.youtube.com/watch?v=VIDEO_ID" -o ./output -q 1080p
+```
+
+### Interactive Tabbed Control Center (TUI)
 
 ```bash
 rconv tui
 ```
 
-The TUI starts in the current directory and provides a media browser, output folder creation, audio track selection, conversion progress, execution logs and cancellation controls. Use the arrow keys to navigate, `Enter` to select, `P` to type a directory path, and `N` to create a named output folder.
+The redesigned TUI features a top **Tab navigation bar** and **Button-styled action panels**:
 
-### Examples
+1. **📁 1. Local Files**:
+   - Action buttons (`[ 📥 Input ]`, `[ 📤 Output ]`, `[ 📁 New Folder ]`, `[ 🚀 Start ]`, etc.)
+   - Visual media and directory browser
+   - Configuration summary card
+2. **🌐 2. Web Download (yt-dlp)**:
+   - Dedicated panel to enter and paste video URLs
+   - Resolution selector: `Best (4K)`, `1080p`, `720p`, `480p`, `360p` or `Audio Only`
+   - Toggle to keep or discard the raw downloaded video
+   - Destination folder selector and direct start button
+3. **ℹ️ 3. About & Help**:
+   - FFmpeg and yt-dlp health status, codec configurations and keyboard shortcut reference
+
+Main Keyboard Shortcuts:
+- `1`, `2`, `3` (or `F1`, `F2`, `F3`): Switch directly between tabs
+- `Tab`: Cycle focus across visible panels in the active tab
+- `↑` / `↓`: Navigate options and buttons
+- `Enter`: Select or execute action
+- `P`: Type a directory path
+- `N`: Create named output folder
+- `Esc`: Close popups or exit
+- `Ctrl + C`: Safely cancel running process
+
+### 🖥️ Native Desktop GUI (Rust & Slint)
+
+In addition to the CLI and TUI, the project includes an elegant desktop graphical application written in **Rust** using **Slint UI**:
+- **100% Native for Wayland & X11**: Renders directly via GPU hardware acceleration (OpenGL/FemtoVG), free of WebKitGTK or Chromium runtimes, ensuring rock-solid stability and zero Wayland crashes.
+- **GitHub Exclusive Distribution**: Kept completely out of npm. Pre-built standalone packages are distributed through [GitHub Releases](https://github.com/lucastiagoo/resolver-converter/releases).
+
+To compile and launch the GUI locally:
+```bash
+cd gui
+cargo run --release
+```
+
+### Local Conversion Examples
 
 ```bash
 # Convert a single file
@@ -107,18 +173,38 @@ bun add @ltcode/rconv
 ### API
 
 ```typescript
-import { convertVideo, convertMultiple } from '@ltcode/rconv';
+import { 
+  convertVideo, 
+  convertMultiple, 
+  downloadAndConvert, 
+  checkFfmpeg, 
+  checkYtDlp 
+} from '@ltcode/rconv';
 
-// Convert a single video
+// 1. Download and convert from URL
+const dlResult = await downloadAndConvert({
+  url: 'https://www.youtube.com/watch?v=VIDEO_ID',
+  output: './output',
+  keepOriginal: false, // optional (defaults to false)
+  onDownloadProgress: (percent, statusText) => {
+    console.log(`Download: ${percent}%`);
+  },
+  onConvertProgress: (percent) => {
+    console.log(`Conversion: ${percent}%`);
+  },
+  onComplete: (result) => {
+    console.log(`Saved at: ${result.output}`);
+  },
+});
+
+// 2. Convert a single local video
 const result = await convertVideo({
   input: 'video.mp4',
   output: './output',
   audioTracks: [1, 3], // optional
 });
 
-console.log(result.success); // true or false
-
-// Convert multiple videos
+// 3. Convert multiple videos
 const results = await convertMultiple({
   input: '*.mp4',
   output: './converted',
@@ -126,69 +212,77 @@ const results = await convertMultiple({
   onProgress: (percent, file) => {
     console.log(`${file}: ${percent}%`);
   },
-  onComplete: (file) => {
-    console.log(`Done: ${file}`);
-  },
-  onError: (file, error) => {
-    console.error(`Error: ${file} - ${error.message}`);
-  },
 });
 
-// Check if FFmpeg is available
-import { checkFfmpeg } from '@ltcode/rconv';
-
+// 4. Check dependencies
 if (!checkFfmpeg()) {
   console.error('FFmpeg not found');
 }
+if (!checkYtDlp()) {
+  console.error('yt-dlp not found');
+}
 ```
 
-### Types
+## Graphical Interface (Rust GUI)
 
-```typescript
-import type { ConvertOptions, ConvertResult } from '@ltcode/rconv';
+`rconv` features a native **Rust** GUI built with **Slint**, delivering high performance, minimal memory footprint, and native Wayland and X11 support.
 
-interface ConvertOptions {
-  input: string;
-  output: string;
-  recursive?: boolean;
-  audioTracks?: number[];
-  onProgress?: (percent: number, file: string) => void;
-  onStart?: (file: string) => void;
-  onComplete?: (file: string) => void;
-  onError?: (file: string, error: Error) => void;
-}
+> [!NOTE]
+> The GUI is distributed as a native binary via GitHub Releases and is not published to npm.
 
-interface ConvertResult {
-  input: string;
-  output: string;
-  success: boolean;
-  error?: Error;
-}
+### GUI Features
+
+- **Smart Download**: Paste YouTube or Web URLs directly from clipboard (`Ctrl+V` or built-in button) with automatic resolution detection (4K, 2K, 1080p, 720p, etc.).
+- **DaVinci Resolve Audio Guarantee**: Merges streams and converts directly to `.mov` with **16-bit Linear PCM audio** (`pcm_s16le`).
+- **Audio Track Mapping**: Detects all existing audio streams in the video via `ffprobe` and allows selective track mapping.
+- **Audio-Only Extraction**: Dedicated toggle to extract audio tracks without video as PCM `.mov`.
+- **Multi-track External Audio & Waveform Sync**: Add external microphone/recorder audio tracks (.wav, .mp3, etc.) with automatic waveform cross-correlation alignment via FFT, reference track selection, and manual latency/offset compensation.
+- **Directory Hierarchy Preservation**: Recursively converts folders while preserving complete directory trees.
+- **Post-Conversion Actions**: Direct buttons to open destination folder or play converted media in your default system player.
+- **Settings Persistence**: Automatically saves download and conversion directories across sessions in `~/.config/rconv/settings.json`.
+
+### Running & Development (Hot Reload)
+
+```bash
+# Run GUI in development mode
+bun run gui:dev
+# or: cargo run --manifest-path gui/Cargo.toml
+
+# Run with automatic Hot Reload (recompiles and restarts on code or UI changes)
+bun run gui:watch
+# or: cargo watch -C gui -x run
+
+# Build optimized release binary
+bun run gui:build
 ```
 
 ## Requirements
 
-- FFmpeg must be installed and available in PATH
+- **FFmpeg**: required for video conversion
+- **yt-dlp**: required when downloading videos from the Web
 
-### Installing FFmpeg
+### Installing dependencies
 
 ```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
+# Ubuntu / Debian
+sudo apt install ffmpeg yt-dlp
 
 # Fedora
-sudo dnf install ffmpeg
+sudo dnf install ffmpeg yt-dlp
 
 # Arch Linux
-sudo pacman -S ffmpeg
+sudo pacman -S ffmpeg yt-dlp
 
 # macOS
-brew install ffmpeg
+brew install ffmpeg yt-dlp
+
+# Python (to update yt-dlp if needed)
+pip install -U yt-dlp
 ```
 
 ## Supported Formats
 
-Any format supported by FFmpeg can be used as input. Output is `.mov` with MPEG-4 codec and PCM audio, which is widely compatible with DaVinci Resolve on Linux.
+Any format supported by FFmpeg can be used as input. Output is `.mov` with MPEG-4 video and PCM audio, compatible with DaVinci Resolve on Linux.
 
 ## License
 
