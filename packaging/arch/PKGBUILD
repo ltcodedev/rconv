@@ -1,0 +1,24 @@
+# Maintainer: Lucas Tiago <eulucastiago@outlook.com>
+pkgname=rconv-gui-bin
+pkgver=1.2.0
+pkgrel=1
+pkgdesc="Native Rust/Slint GUI for converting videos to DaVinci Resolve compatible format"
+arch=('x86_64')
+url="https://github.com/ltcodedev/rconv"
+license=('MIT')
+depends=('ffmpeg' 'fontconfig' 'libx11' 'libxkbcommon' 'libglvnd')
+optdepends=('yt-dlp: direct web video download support')
+provides=('rconv-gui')
+conflicts=('rconv-gui')
+source=("https://github.com/ltcodedev/rconv/releases/download/v${pkgver}/rconv-gui-linux-x86_64.tar.gz"
+        "https://raw.githubusercontent.com/ltcodedev/rconv/v${pkgver}/packaging/rconv-gui.desktop"
+        "https://raw.githubusercontent.com/ltcodedev/rconv/v${pkgver}/packaging/rconv-gui.svg")
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+package() {
+    install -Dm755 "${srcdir}/rconv-gui" "${pkgdir}/usr/bin/rconv-gui"
+    install -Dm644 "${srcdir}/rconv-gui.desktop" "${pkgdir}/usr/share/applications/rconv-gui.desktop"
+    install -Dm644 "${srcdir}/rconv-gui.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/rconv-gui.svg"
+}

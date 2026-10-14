@@ -1,0 +1,54 @@
+app-id: io.github.ltcodedev.rconv
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: rconv-gui
+
+finish-args:
+  # Wayland and X11 display access
+  - --socket=wayland
+  - --socket=fallback-x11
+  # Audio and GPU acceleration
+  - --socket=pulseaudio
+  - --device=dri
+  # File system access to convert videos
+  - --filesystem=host
+  # Network access for yt-dlp downloader
+  - --share=network
+  - --share=ipc
+
+modules:
+  - name: ffmpeg
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+      - /share/doc
+      - /share/man
+    config-opts:
+      - --enable-gpl
+      - --enable-libmp3lame
+      - --enable-libopus
+      - --enable-libvorbis
+      - --enable-libvpx
+      - --enable-libx264
+    sources:
+      - type: git
+        url: https://git.ffmpeg.org/ffmpeg.git
+        tag: n7.0
+
+  - name: rconv-gui
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 rconv-gui /app/bin/rconv-gui
+      - install -Dm644 rconv-gui.desktop /app/share/applications/io.github.ltcodedev.rconv.desktop
+      - install -Dm644 rconv-gui.svg /app/share/icons/hicolor/scalable/apps/io.github.ltcodedev.rconv.svg
+      - install -Dm644 io.github.ltcodedev.rconv.metainfo.xml /app/share/metainfo/io.github.ltcodedev.rconv.metainfo.xml
+    sources:
+      - type: file
+        path: ../../gui/target/release/rconv-gui
+      - type: file
+        path: ../rconv-gui.desktop
+      - type: file
+        path: ../rconv-gui.svg
+      - type: file
+        path: io.github.ltcodedev.rconv.metainfo.xml

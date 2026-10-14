@@ -1,4 +1,4 @@
-name: Release Linux GUI (Rust & Slint)
+name: Release Linux Packages (GUI & Universal Distros)
 
 on:
   push:
@@ -10,11 +10,20 @@ permissions:
   contents: write
 
 jobs:
-  build-gui:
+  build-and-package:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract Version
+        id: vars
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION="1.2.0"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -32,33 +41,169 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-gui-
 
-      - name: Install Linux build dependencies
+      - name: Install Linux build dependencies & packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev libgl1-mesa-dev
+          sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev libgl1-mesa-dev rpm zstd
 
       - name: Build Release Binary
         run: |
           cargo build --release --manifest-path gui/Cargo.toml
           strip gui/target/release/rconv-gui
 
-      - name: Package Standalone Linux Tarball
+      - name: Generate All Distribution Packages
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
         run: |
-          mkdir -p release-dist
-          cp gui/target/release/rconv-gui release-dist/rconv-gui
-          chmod +x release-dist/rconv-gui
-          tar -czvf rconv-gui-linux-x86_64.tar.gz -C release-dist rconv-gui
+          mkdir -p dist-packages
+          RELEASE_BIN="$(pwd)/gui/target/release/rconv-gui"
 
-      - name: Upload Binary Artifact
+          # 1. Standalone Tarball
+          echo "Packaging Tarball..."
+          TAR_STAGE=$(mktemp -d)
+          mkdir -p "$TAR_STAGE/rconv-gui"
+          cp "$RELEASE_BIN" "$TAR_STAGE/rconv-gui/rconv-gui"
+          cp packaging/rconv-gui.desktop "$TAR_STAGE/rconv-gui/"
+          cp packaging/rconv-gui.svg "$TAR_STAGE/rconv-gui/"
+          tar -czvf "dist-packages/rconv-gui-linux-x86_64.tar.gz" -C "$TAR_STAGE" rconv-gui
+          rm -rf "$TAR_STAGE"
+
+          # 2. Debian / Ubuntu (.deb)
+          echo "Packaging Debian (.deb)..."
+          DEB_STAGE=$(mktemp -d)
+          mkdir -p "$DEB_STAGE/usr/bin"
+          mkdir -p "$DEB_STAGE/usr/share/applications"
+          mkdir -p "$DEB_STAGE/usr/share/icons/hicolor/scalable/apps"
+          mkdir -p "$DEB_STAGE/DEBIAN"
+          cp "$RELEASE_BIN" "$DEB_STAGE/usr/bin/rconv-gui"
+          chmod 755 "$DEB_STAGE/usr/bin/rconv-gui"
+          cp packaging/rconv-gui.desktop "$DEB_STAGE/usr/share/applications/"
+          cp packaging/rconv-gui.svg "$DEB_STAGE/usr/share/icons/hicolor/scalable/apps/"
+          cat << EOF > "$DEB_STAGE/DEBIAN/control"
+          Package: rconv-gui
+          Version: ${VERSION}
+          Section: video
+          Priority: optional
+          Architecture: amd64
+          Depends: ffmpeg, fontconfig, libx11-6, libxkbcommon0
+          Recommends: yt-dlp
+          Maintainer: Lucas Tiago <eulucastiago@outlook.com>
+          Homepage: https://github.com/ltcodedev/rconv
+          Description: Native Rust/Slint GUI for converting videos to DaVinci Resolve
+           Modern Linux video converter with PCM audio, web downloading,
+           and waveform audio synchronization for DaVinci Resolve.
+          EOF
+          sed -i 's/^[ \t]*//' "$DEB_STAGE/DEBIAN/control"
+          dpkg-deb --build "$DEB_STAGE" "dist-packages/rconv-gui_${VERSION}_amd64.deb"
+          rm -rf "$DEB_STAGE"
+
+          # 3. Red Hat / Fedora (.rpm)
+          echo "Packaging RPM (.rpm)..."
+          RPM_STAGE=$(mktemp -d)
+          mkdir -p "$RPM_STAGE"/{BUILD,RPMS,SOURCES,SPECS,SRPMS,BUILDROOT}
+          cat << EOF > "$RPM_STAGE/SPECS/rconv-gui.spec"
+          Name:           rconv-gui
+          Version:        ${VERSION}
+          Release:        1%{?dist}
+          Summary:        Native DaVinci Resolve video converter with PCM audio
+          License:        MIT
+          URL:            https://github.com/ltcodedev/rconv
+          AutoReqProv:    no
+
+          %description
+          Native Rust/Slint GUI for DaVinci Resolve video conversion.
+
+          %install
+          mkdir -p %{buildroot}%{_bindir}
+          mkdir -p %{buildroot}%{_datadir}/applications
+          mkdir -p %{buildroot}%{_datadir}/icons/hicolor/scalable/apps
+
+          install -m 755 "${RELEASE_BIN}" %{buildroot}%{_bindir}/rconv-gui
+          install -m 644 "$(pwd)/packaging/rconv-gui.desktop" %{buildroot}%{_datadir}/applications/rconv-gui.desktop
+          install -m 644 "$(pwd)/packaging/rconv-gui.svg" %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/rconv-gui.svg
+
+          %files
+          %{_bindir}/rconv-gui
+          %{_datadir}/applications/rconv-gui.desktop
+          %{_datadir}/icons/hicolor/scalable/apps/rconv-gui.svg
+          EOF
+          sed -i 's/^[ \t]*//' "$RPM_STAGE/SPECS/rconv-gui.spec"
+          rpmbuild --define "_topdir $RPM_STAGE" -bb "$RPM_STAGE/SPECS/rconv-gui.spec"
+          find "$RPM_STAGE/RPMS" -name "*.rpm" -exec cp {} "dist-packages/rconv-gui-${VERSION}-1.x86_64.rpm" \;
+          rm -rf "$RPM_STAGE"
+
+          # 4. AppImage
+          echo "Packaging AppImage (.AppImage)..."
+          APPDIR=$(mktemp -d)
+          mkdir -p "$APPDIR/usr/bin"
+          mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+          cp "$RELEASE_BIN" "$APPDIR/usr/bin/rconv-gui"
+          chmod 755 "$APPDIR/usr/bin/rconv-gui"
+          cp packaging/rconv-gui.desktop "$APPDIR/rconv-gui.desktop"
+          cp packaging/rconv-gui.svg "$APPDIR/rconv-gui.svg"
+          cp packaging/rconv-gui.svg "$APPDIR/.DirIcon"
+          cp packaging/rconv-gui.svg "$APPDIR/usr/share/icons/hicolor/scalable/apps/rconv-gui.svg"
+
+          cat << 'EOF' > "$APPDIR/AppRun"
+          #!/bin/sh
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          exec "${HERE}/usr/bin/rconv-gui" "$@"
+          EOF
+          chmod 755 "$APPDIR/AppRun"
+
+          curl -sL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run "$APPDIR" "dist-packages/rconv-gui-${VERSION}-x86_64.AppImage"
+          rm -rf "$APPDIR" appimagetool
+
+      - name: Build Arch Linux package (Docker)
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          docker run --rm -v "$(pwd):/build" -w /build archlinux:latest bash -c "
+            pacman -Syu --noconfirm base-devel zstd git
+            useradd -m builder && chown -R builder:builder /build
+            su builder -c '
+              cd /build
+              ARCH_DIR=\$(mktemp -d)
+              cat << EOF > \$ARCH_DIR/PKGBUILD
+          pkgname=rconv-gui-bin
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc=\"Native Rust/Slint GUI for DaVinci Resolve conversion\"
+          arch=(\"x86_64\")
+          url=\"https://github.com/ltcodedev/rconv\"
+          license=(\"MIT\")
+          depends=(\"ffmpeg\" \"fontconfig\" \"libx11\" \"libxkbcommon\" \"libglvnd\")
+          optdepends=(\"yt-dlp: direct web video download support\")
+          provides=(\"rconv-gui\")
+          conflicts=(\"rconv-gui\")
+
+          package() {
+              install -Dm755 /build/gui/target/release/rconv-gui \"\\\${pkgdir}/usr/bin/rconv-gui\"
+              install -Dm644 /build/packaging/rconv-gui.desktop \"\\\${pkgdir}/usr/share/applications/rconv-gui.desktop\"
+              install -Dm644 /build/packaging/rconv-gui.svg \"\\\${pkgdir}/usr/share/icons/hicolor/scalable/apps/rconv-gui.svg\"
+          }
+          EOF
+              (cd \$ARCH_DIR && PKGDEST=/build/dist-packages makepkg -f --nodeps)
+              for f in /build/dist-packages/*pkg.tar; do
+                [ -f \"\$f\" ] && zstd -z --rm \"\$f\" -o \"\${f}.zst\"
+              done
+            '
+          "
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rconv-gui-linux-x86_64
-          path: rconv-gui-linux-x86_64.tar.gz
+          name: linux-packages
+          path: dist-packages/*
 
-      - name: Create GitHub Release
+      - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: rconv-gui-linux-x86_64.tar.gz
+          files: dist-packages/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

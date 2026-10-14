@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=rconv
+GenericName=Conversor DaVinci Resolve
+Comment=Conversão de vídeos com áudio PCM para DaVinci Resolve e download web
+Exec=rconv-gui %U
+Icon=rconv-gui
+Terminal=false
+Type=Application
+Categories=AudioVideo;AudioVideoEditing;Video;
+MimeType=video/mp4;video/quicktime;video/x-matroska;video/webm;
+Keywords=davinci;resolve;video;converter;transcode;audio;pcm;
+StartupNotify=true

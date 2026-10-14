@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.ltcodedev.rconv</id>
+  <name>rconv</name>
+  <summary>Native DaVinci Resolve video converter with PCM audio</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      rconv is a modern video converter designed specifically for DaVinci Resolve on Linux.
+      It features hardware-accelerated transcoding to DaVinci Resolve compatible MOV format with PCM audio,
+      web video downloading, and multi-track waveform audio synchronization.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.ltcodedev.rconv.desktop</launchable>
+  <url type="homepage">https://github.com/ltcodedev/rconv</url>
+  <url type="bugtracker">https://github.com/ltcodedev/rconv/issues</url>
+  <releases>
+    <release version="1.2.0" date="2026-10-14"/>
+  </releases>
+</component>
